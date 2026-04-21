@@ -73,13 +73,14 @@
                 CircleCheck: "circle-check", Settings: "settings", FileDown: "file-down", Loader2: "loader-2", 
                 RefreshCw: "refresh-cw", ShieldCheck: "shield-check", Battery: "battery", Clock: "clock", 
                 CalendarClock: "calendar-clock", Calendar: "calendar", Box: "box", PlusCircle: "plus-circle", 
-                Trash2: "trash-2", UserPlus: "user-plus", Shield: "shield", IdCard: "id-card", Cloud: "cloud", Database: "database"
+                Trash2: "trash-2", UserPlus: "user-plus", Shield: "shield", IdCard: "id-card", Cloud: "cloud", Database: "database",
+                Edit: "edit"
             };
 
             const Icons = Object.fromEntries(
                 Object.entries(LucideIconsList).map(([key, name]) => [key, (props) => <Icon name={name} {...props} />])
             );
-            const { Plus, Search, X, Save, ArrowLeft, Info, Wrench, Activity, ArrowLeftRight, Building2, Tag, MapPin, ClipboardList, ChevronRight, FileText, User, Lock, LogIn, LogOut, AlertCircle, Hash, Printer, Stethoscope, Users, LayoutDashboard, CircleCheck, Settings, FileDown, Loader2, RefreshCw, ShieldCheck, Battery, Clock, CalendarClock, Calendar, Box, PlusCircle, Trash2, UserPlus, Shield, IdCard, Cloud, Database } = Icons;
+            const { Plus, Search, X, Save, ArrowLeft, Info, Wrench, Activity, ArrowLeftRight, Building2, Tag, MapPin, ClipboardList, ChevronRight, FileText, User, Lock, LogIn, LogOut, AlertCircle, Hash, Printer, Stethoscope, Users, LayoutDashboard, CircleCheck, Settings, FileDown, Loader2, RefreshCw, ShieldCheck, Battery, Clock, CalendarClock, Calendar, Box, PlusCircle, Trash2, UserPlus, Shield, IdCard, Cloud, Database, Edit } = Icons;
 
             // ==========================================
             // Helper Functions
@@ -126,9 +127,9 @@
                 }[status] || { bg: "bg-slate-500", text: "text-white" };
 
                 return (
-                    <div className={`${config.bg} ${config.text} px-2 py-0.5 rounded-full border border-slate-400/30 flex items-center gap-1.5 shadow-sm`}>
+                    <div className={`${config.bg} ${config.text} px-2.5 py-1 rounded-full border border-slate-400/30 flex items-center gap-1.5 shadow-sm h-full`}>
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-                        <span className="text-[10px] font-bold uppercase tracking-tight">{status}</span>
+                        <span className="text-[11px] font-black uppercase tracking-tight">{status}</span>
                     </div>
                 );
             };
@@ -209,6 +210,10 @@
                     username: '', password: '', name: '', surname: '', position: '', department: 'ER', role: 'user'
                 });
 
+                // Status Edit Modal State
+                const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+                const [editStatusValue, setEditStatusValue] = useState('');
+
                 const initialFormState = { 
                     fsn: '', id: '', gf: '', name: '', model: '', serialNo: '', vendor: '', department: 'ER',
                     receivedDate: '', warrantyExpire: '', lifespan: '', batteryChangeDate: '', status: 'ใช้งานปกติ',
@@ -282,11 +287,14 @@
                     
                     if (isSuccess) {
                         setUsers(prevUsers => {
+                            // ตรวจสอบว่าในระบบมีผู้ใช้อย่างน้อย 1 คนหรือไม่ ถ้าไม่มีให้แจ้งเตือน
                             if(prevUsers.length === 0) {
-                                setAlert({ message: "ยังไม่มีผู้ใช้ในระบบเลย กรุณาตรวจสอบ Google Sheets", type: "error" });
+                                setAlert({ message: "ยังไม่มีผู้ใช้ในระบบเลย กรุณาตรวจสอบโค้ดฝั่ง Google Sheets", type: "error" });
                                 return prevUsers;
                             }
-                            const user = prevUsers.find(u => u.username === form.username && u.password === form.password);
+                            
+                            // แก้ไขปัญหา Type Mismatch: แปลงข้อมูลเป็นข้อความ (String) ก่อนเปรียบเทียบ
+                            const user = prevUsers.find(u => String(u.username) === String(form.username) && String(u.password) === String(form.password));
                             if (user) {
                                 setCurrentUserData(user);
                                 setAlert({ message: `เข้าสู่ระบบสำเร็จ ยินดีต้อนรับคุณ ${user.name}`, type: "success" });
@@ -296,7 +304,6 @@
                             return prevUsers;
                         });
                     }
-                    
                     setLoading(false);
                     setTimeout(() => setAlert(null), 3000);
                 };
@@ -426,6 +433,29 @@
                         } else throw new Error(res.message);
                     } catch(err) {
                         setAlert({ message: "อัปเดตข้อมูลล้มเหลว: " + err.message, type: "error" });
+                    } finally {
+                        setLoading(false);
+                        setTimeout(() => setAlert(null), 3000);
+                    }
+                };
+
+                // ฟังก์ชันอัปเดตสถานะ (Status Update)
+                const handleUpdateStatus = async (e) => {
+                    e.preventDefault();
+                    setLoading(true);
+                    
+                    const updatedAsset = { ...selectedAsset, status: editStatusValue };
+
+                    try {
+                        const res = await sendToDatabase("updateAsset", updatedAsset);
+                        if(res.status === "success") {
+                            setAssets(assets.map(a => a.docId === updatedAsset.docId ? updatedAsset : a));
+                            setSelectedAsset(updatedAsset);
+                            setIsStatusModalOpen(false);
+                            setAlert({ message: "แก้ไขสถานะปัจจุบันเรียบร้อยแล้ว", type: "success" });
+                        } else throw new Error(res.message);
+                    } catch(err) {
+                        setAlert({ message: "อัปเดตสถานะล้มเหลว: " + err.message, type: "error" });
                     } finally {
                         setLoading(false);
                         setTimeout(() => setAlert(null), 3000);
@@ -671,10 +701,27 @@
                                             <div className="absolute top-0 right-0 opacity-5 translate-x-10 -translate-y-10"><Stethoscope size={250}/></div>
                                             <div className="bg-white p-3 rounded-3xl shadow-2xl rotate-3 relative z-10 shrink-0"><QRCodeGenerator value={selectedAsset.id} size={120} /></div>
                                             <div className="text-center md:text-left flex-1 relative z-10">
+                                                
+                                                {/* ========================================================= */}
+                                                {/* จุดที่เพิ่มปุ่มแก้ไขสถานะข้างบอลลูน (Status Badge) */}
+                                                {/* ========================================================= */}
                                                 <div className="flex flex-wrap gap-2 mb-4 items-center justify-center md:justify-start">
                                                     <span className="bg-white/20 backdrop-blur-sm px-3.5 py-1.5 rounded-lg text-[12px] font-black border border-white/30 uppercase tracking-widest shadow-sm">ID: {selectedAsset.id}</span>
-                                                    <StatusBadge status={selectedAsset.status} />
+                                                    <div className="flex items-stretch gap-1">
+                                                        <StatusBadge status={selectedAsset.status} />
+                                                        <button 
+                                                            onClick={() => {
+                                                                setEditStatusValue(selectedAsset.status);
+                                                                setIsStatusModalOpen(true);
+                                                            }}
+                                                            className="bg-white/20 hover:bg-white/40 backdrop-blur-sm p-2 rounded-full transition-all text-white flex items-center justify-center border border-white/30 shadow-sm"
+                                                            title="อัปเดตสถานะปัจจุบัน"
+                                                        >
+                                                            <Edit size={14} />
+                                                        </button>
+                                                    </div>
                                                 </div>
+                                                
                                                 <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tight mb-4 drop-shadow-md leading-normal">{selectedAsset.name}</h2>
                                                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-[14px] opacity-90 font-bold uppercase tracking-widest">
                                                     <span className="flex items-center gap-1.5"><Building2 size={18}/> {selectedAsset.department}</span>
@@ -811,6 +858,39 @@
                                 </div>
                             ) : null}
                         </div>
+
+                        {/* =========================================
+                            Modal: แก้ไขสถานะปัจจุบัน
+                            ========================================= */}
+                        {isStatusModalOpen && (
+                            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[300] flex items-center justify-center p-4 md:p-6">
+                                <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 md:p-8 shadow-2xl border border-slate-300 animate-fade-in relative z-10">
+                                    <h2 className="text-xl font-black uppercase mb-6 flex justify-between items-center text-slate-800">
+                                        <span className="flex items-center gap-2">
+                                            <Activity className="text-blue-600"/> แก้ไขสถานะ
+                                        </span>
+                                        <button type="button" onClick={() => setIsStatusModalOpen(false)} className="text-slate-400 hover:text-slate-800"><X size={24}/></button>
+                                    </h2>
+                                    <form onSubmit={handleUpdateStatus} className="space-y-4">
+                                        <div className="flex flex-col gap-1 w-full">
+                                            <label className="text-[13px] font-bold text-slate-600 flex items-center gap-1.5 ml-0.5">
+                                                สถานะปัจจุบัน
+                                            </label>
+                                            <select 
+                                                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white outline-none transition text-[15px] font-medium shadow-inner"
+                                                value={editStatusValue}
+                                                onChange={e => setEditStatusValue(e.target.value)}
+                                            >
+                                                {STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                            </select>
+                                        </div>
+                                        <button type="submit" className="w-full py-3.5 bg-blue-600 text-white rounded-xl font-black uppercase mt-6 shadow-xl shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center gap-2 text-[15px]">
+                                            <Save size={20} /> อัปเดตสถานะขึ้น Cloud
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
 
                         {/* =========================================
                             Modal: ลงทะเบียนเครื่องมือใหม่ (TABBED VERSION)
